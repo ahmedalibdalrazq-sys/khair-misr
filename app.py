@@ -22,7 +22,9 @@ def send_telegram_notification(order_data, notification_type="new_order"):
             discount = order_data.get('discount', 0)
             final_total = total_products + delivery - discount
 
-            discount_text = f"\n🎁 الخصم: {discount} ج.م" if discount > 0 else ""
+            discount_text = ""
+            if discount > 0:
+                discount_text = f"\n🎁 الخصم: {discount} ج.م"
 
             message = (
                 f"🛒 طلب جديد واصل!\n\n"
@@ -52,7 +54,11 @@ def send_telegram_notification(order_data, notification_type="new_order"):
             )
 
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message,
+            "parse_mode": "Markdown"
+        }
 
         response = requests.post(url, json=payload, timeout=5)
         return response.status_code == 200
@@ -118,30 +124,46 @@ original_products = [
     {"id": 32, "name": "جرجير", "name_en": "Fresh Arugula", "price": 2.5, "stock": 200},
     {"id": 33, "name": "ملوخية خضراء", "name_en": "Green Molokhia", "price": 12.0, "stock": 40},
     {"id": 34, "name": "سبانخ بلدي", "name_en": "Local Spinach", "price": 15.0, "stock": 35},
-    {"id": 35, "name": "خس كابوتشا", "name_en": "Iceberg Lettuce", "price": 7.0, "stock": 80},
-    {"id": 36, "name": "ورق عنب", "name_en": "Grape Leaves", "price": 40.0, "stock": 100},
+    {"id": 35, "name": "خس كابوتشا", "name_en": "Iceberg Lettuce", "price": 7.0, "stock": 80}
 ]
 
 
 # ========== SESSION STATE INIT ==========
 if 'products' not in st.session_state:
     st.session_state.products = original_products.copy()
+
 if 'orders' not in st.session_state:
     st.session_state.orders = []
+
 if 'cart_version' not in st.session_state:
     st.session_state.cart_version = 0
+
 if 'feedback' not in st.session_state:
     st.session_state.feedback = []
+
 if 'delivery_fee' not in st.session_state:
     st.session_state.delivery_fee = 20.0
+
 if 'delivery_zones' not in st.session_state:
     st.session_state.delivery_zones = {
-        "مدينة نصر": 20.0, "مصر الجديدة": 25.0, "المعادي": 30.0,
-        "الدقي": 25.0, "الزمالك": 30.0, "العباسية": 15.0,
-        "التحرير": 20.0, "القاهرة الجديدة": 35.0, "6 أكتوبر": 40.0, "الشيخ زايد": 45.0,
+        "مدينة نصر": 20.0,
+        "مصر الجديدة": 25.0,
+        "المعادي": 30.0,
+        "الدقي": 25.0,
+        "الزمالك": 30.0,
+        "العباسية": 15.0,
+        "التحرير": 20.0,
+        "القاهرة الجديدة": 35.0,
+        "6 أكتوبر": 40.0,
+        "الشيخ زايد": 45.0,
     }
+
 if 'discount_settings' not in st.session_state:
-    st.session_state.discount_settings = {"enabled": True, "threshold": 200.0, "percentage": 10.0}
+    st.session_state.discount_settings = {
+        "enabled": True,
+        "threshold": 200.0,
+        "percentage": 10.0,
+    }
 
 
 # ========== HELPER FUNCTIONS ==========
@@ -161,40 +183,38 @@ def get_zone_delivery(zone_name):
 
 
 def generate_receipt_html(order, index):
-    items_html = "".join([
-        f"<tr><td style='padding:8px; border-bottom:1px solid #eee;'>{it['المنتج']}</td>"
-        f"<td style='text-align:center;'>{it['الكمية']}</td>"
-        f"<td style='text-align:left;'>{it['المجموع']} ج.م</td></tr>"
-        for it in order['items']
-    ])
-    
+    items_html = "".join([f"<tr><td style='padding:8px; border-bottom:1px solid #eee;'>{it['المنتج']}</td><td style='text-align:center;'>{it['الكمية']}</td><td style='text-align:left;'>{it['المجموع']} ج.م</td></tr>" for it in order['items']])
     total_products = order['total']
     delivery = order.get('delivery', 0)
     discount = order.get('discount', 0)
     final_total = total_products + delivery - discount
 
-    delivery_html = f"""
+    delivery_html = ""
+    if delivery > 0:
+        delivery_html = f"""
         <div style="margin-top:8px; padding:8px; background:#fff3e0; border-radius:5px; text-align:center; color:#e65100; font-weight:bold;">
             🚚 خدمة التوصيل ({order.get('zone', 'غير محدد')}): {delivery} ج.م
         </div>
-    """ if delivery > 0 else ""
+        """
 
-    discount_html = f"""
+    discount_html = ""
+    if discount > 0:
+        discount_html = f"""
         <div style="margin-top:8px; padding:8px; background:#fce4ec; border-radius:5px; text-align:center; color:#c2185b; font-weight:bold;">
             🎁 خصم ({st.session_state.discount_settings['percentage']}%): -{discount} ج.م
         </div>
-    """ if discount > 0 else ""
+        """
 
     return f"""
     <div id="print_area_{index}" style="font-family:'Cairo', Arial; direction:rtl; padding:20px; border:1px solid #ddd; border-radius:10px; width:280px; margin:auto; background:white; color: black;">
-        <h2 style="text-align:center; color:#2e7d32; margin:0;">🍓🥬🍉🥕 اسواق خير مصر</h2>
-        <hr><div style="font-size:13px;"><p><b>العميل:</b> {order['name']}</p><p><b>الهاتف:</b> {order['phone']}</p>
-        <p><b>العنوان:</b> {order['address']}</p><p><b>المنطقة:</b> {order.get('zone', 'غير محدد')}</p></div>
-        <table style="width:100%; font-size:12px; margin-top:10px; border-collapse:collapse;">
-        <tr style="background:#f4f4f4;"><th>الصنف</th><th>كمية</th><th>سعر</th></tr>{items_html}</table>
+        <h2 style="text-align:center; color:#2e7d32; margin:0;">🍓🥬🍉🥕 اسواق خير مصرللفواكه والخضروات </h2>
+        <hr><div style="font-size:13px;"><p><b>العميل:</b> {order['name']}</p><p><b>الهاتف:</b> {order['phone']}</p><p><b>العنوان:</b> {order['address']}</p><p><b>المنطقة:</b> {order.get('zone', 'غير محدد')}</p></div>
+        <table style="width:100%; font-size:12px; margin-top:10px; border-collapse:collapse;"><tr style="background:#f4f4f4;"><th>الصنف</th><th>كمية</th><th>سعر</th></tr>{items_html}</table>
         <div style="margin-top:8px; padding:8px; background:#e8f5e9; border-radius:5px; text-align:center; color:#2e7d32; font-weight:bold;">
             💰 المنتجات: {total_products} ج.م
-        </div>{delivery_html}{discount_html}
+        </div>
+        {delivery_html}
+        {discount_html}
         <div style="margin-top:10px; border-top:2px solid #2e7d32; padding-top:10px; font-weight:bold; text-align:center; background:#2e7d32; color:white; border-radius:5px; font-size:18px;">
             الإجمالي النهائي: {final_total} ج.م
         </div>
@@ -206,7 +226,7 @@ def generate_receipt_html(order, index):
 
 # ========== SIDEBAR ==========
 with st.sidebar:
-    st.markdown("<h1 style='text-align: center; color: #2e7d32;'>🍓🥬🍉🥕 اسواق خير مصر</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #2e7d32;'>🍓🥬🍉🥕 اسواق خير مصرللفواكه والخضروات</h1>", unsafe_allow_html=True)
     st.image("https://cdn-icons-png.flaticon.com/512/2329/2329865.png", use_column_width=True)
     st.divider()
     st.session_state.lang = st.radio("🌐 Language:", ["العربية", "English"], horizontal=True)
@@ -223,13 +243,17 @@ with st.sidebar:
         stars = st.select_slider("Rating", options=["1", "2", "3", "4", "5"], value="5")
         note = st.text_input("Feedback")
         if st.button("Send"):
-            st.session_state.feedback.append({"date": datetime.now().strftime("%Y-%m-%d"), "stars": stars, "note": note})
+            st.session_state.feedback.append({
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "stars": stars,
+                "note": note
+            })
             st.success("شكراً لك!")
 
 
 # ========== STORE PAGE ==========
 if selection == menu_options["Store"]:
-    st.title(translate("🍓🥬🍉🥕 اسواق خير مصر للفواكه والخضروات", "🥬 Khair Misr Market"))
+    st.title(translate("🍓🥬🍉🥕 اسواق خير مصرللفواكه والخضروات", "🥬 Khair Misr Market"))
     search = st.text_input(translate("🔍 ابحث عن منتج...", "🔍 Search..."))
 
     filtered = [p for p in st.session_state.products if search.lower() in p['name'].lower() or search.lower() in p['name_en'].lower()]
@@ -250,7 +274,9 @@ if selection == menu_options["Store"]:
             c_name = st.text_input(translate("الاسم:", "Name:"))
             c_phone = st.text_input(translate("الهاتف:", "Phone:"))
             c_addr = st.text_input(translate("العنوان:", "Address:"))
-            selected_zone = st.selectbox(translate("🌍 منطقة التوصيل:", "🌍 Delivery Zone:"), list(st.session_state.delivery_zones.keys()))
+
+            zones = list(st.session_state.delivery_zones.keys())
+            selected_zone = st.selectbox(translate("🌍 منطقة التوصيل:", "🌍 Delivery Zone:"), zones)
 
         with col_c2:
             total_sum = sum(v['qty'] * v['price'] for v in cart.values())
@@ -272,11 +298,19 @@ if selection == menu_options["Store"]:
                 if c_name and c_phone and c_addr:
                     new_order = {
                         "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "name": c_name, "phone": c_phone, "address": c_addr, "zone": selected_zone,
+                        "name": c_name,
+                        "phone": c_phone,
+                        "address": c_addr,
+                        "zone": selected_zone,
                         "items": [{"المنتج": v['name'], "الكمية": v['qty'], "المجموع": v['qty']*v['price']} for v in cart.values()],
-                        "total": total_sum, "delivery": delivery, "discount": discount, "done": False
+                        "total": total_sum,
+                        "delivery": delivery,
+                        "discount": discount,
+                        "done": False
                     }
-                    if send_telegram_notification(new_order, "new_order"):
+
+                    telegram_sent = send_telegram_notification(new_order, "new_order")
+                    if telegram_sent:
                         st.success("📨 تم إرسال إشعار التلجرام!")
                     else:
                         st.warning("⚠️ الطلب تم لكن فشل إرسال إشعار التلجرام")
@@ -293,6 +327,7 @@ elif selection == menu_options["Track"]:
     search_p = st.text_input(translate("رقم الهاتف:", "Phone:"), placeholder="01XXXXXXXXX")
     if search_p:
         user_orders = [o for o in st.session_state.orders if o['phone'] == search_p]
+
         for i, o in enumerate(reversed(user_orders)):
             with st.container(border=True):
                 st.write(f"📅 {o['time']}")
@@ -300,11 +335,18 @@ elif selection == menu_options["Track"]:
                 s_active = "step-active" if status == 'نعم' else ""
                 st.markdown(f"<ul class='stepper'><li class='step step-active'>✅ استلام</li><li class='step step-active'>⏳ تجهيز</li><li class='step {s_active}'>🚚 توصيل</li></ul>", unsafe_allow_html=True)
 
-                final = o['total'] + o.get('delivery', 0) - o.get('discount', 0)
-                col_i1, col_i2, col_i3 = st.columns(3)
-                col_i1.metric("المنتجات", f"{o['total']} ج.م")
-                col_i2.metric("التوصيل", f"{o.get('delivery', 0)} ج.م", delta=o.get('zone', ''))
-                col_i3.metric("النهائي", f"{final} ج.م", delta=f"-{o.get('discount', 0)}" if o.get('discount', 0) > 0 else None)
+                delivery = o.get('delivery', 0)
+                discount = o.get('discount', 0)
+                final = o['total'] + delivery - discount
+
+                col_info1, col_info2, col_info3 = st.columns(3)
+                with col_info1:
+                    st.metric("المنتجات", f"{o['total']} ج.م")
+                with col_info2:
+                    st.metric("التوصيل", f"{delivery} ج.م", delta=o.get('zone', ''))
+                with col_info3:
+                    st.metric("النهائي", f"{final} ج.م", delta=f"-{discount}" if discount > 0 else None)
+
                 components.html(generate_receipt_html(o, i), height=550)
 
 
@@ -313,51 +355,126 @@ else:
     pwd = st.sidebar.text_input("Password", type="password")
     if pwd == "10.20.30.40.10":
         st.title(translate("📊 لوحة التحكم", "📊 Admin Dashboard"))
-        tabs = st.tabs([
-            translate("📥 الطلبات", "Orders"), translate("📦 المخزون", "Inventory"),
-            translate("⭐ التقييمات", "Reviews"), translate("🚚 مناطق التوصيل", "Delivery Zones"),
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            translate("📥 الطلبات", "Orders"),
+            translate("📦 المخزون", "Inventory"),
+            translate("⭐ التقييمات", "Reviews"),
+            translate("🚚 مناطق التوصيل", "Delivery Zones"),
             translate("🎁 إعدادات الخصم", "Discount Settings")
         ])
 
-        with tabs[0]:
+        with tab1:
             if st.session_state.orders:
-                orders_df = pd.DataFrame(st.session_state.orders)
-                st.dataframe(orders_df)
-                order_idx = st.selectbox("اختر الطلب للتعديل", range(len(st.session_state.orders)), format_func=lambda i: f"#{i+1} - {st.session_state.orders[i]['name']}")
-                col_b1, col_b2 = st.columns(2)
-                if col_b1.button("✅ تم التسليم") and not st.session_state.orders[order_idx]['done']:
-                    st.session_state.orders[order_idx]['done'] = True
-                    send_telegram_notification(st.session_state.orders[order_idx], "delivered")
-                    st.rerun()
-                if col_b2.button("❌ حذف الطلب"):
-                    st.session_state.orders.pop(order_idx)
-                    st.rerun()
+                orders_display = []
+                for o in st.session_state.orders:
+                    order_copy = o.copy()
+                    order_copy['الإجمالي النهائي'] = o['total'] + o.get('delivery', 0) - o.get('discount', 0)
+                    orders_display.append(order_copy)
+
+                df_orders = pd.DataFrame(orders_display)
+                st.dataframe(df_orders)
+
+                st.markdown("---")
+                st.subheader("📦 تحديث حالة الطلب")
+                order_idx = st.selectbox(
+                    "اختر الطلب",
+                    range(len(st.session_state.orders)),
+                    format_func=lambda i: f"#{i+1} - {st.session_state.orders[i]['name']} - {st.session_state.orders[i]['phone']}"
+                )
+
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if not st.session_state.orders[order_idx]['done']:
+                        if st.button("✅ تم التسليم", use_container_width=True):
+                            st.session_state.orders[order_idx]['done'] = True
+                            send_telegram_notification(st.session_state.orders[order_idx], "delivered")
+                            st.success("✅ تم تحديث الحالة وإرسال إشعار التسليم!")
+                            st.rerun()
+                with col_btn2:
+                    if st.button("❌ حذف الطلب", use_container_width=True):
+                        st.session_state.orders.pop(order_idx)
+                        st.warning("تم حذف الطلب")
+                        st.rerun()
             else:
                 st.info("لا يوجد طلبات حالياً")
 
-        with tabs[1]:
-            edited = st.data_editor(st.session_state.products, num_rows="dynamic")
-            if st.button("💾 حفظ المخزون"):
+        with tab2:
+            st.subheader("إدارة المخزون والأسعار")
+            edited = st.data_editor(st.session_state.products, num_rows="dynamic", use_container_width=True)
+            if st.button("💾 حفظ التغييرات"):
                 st.session_state.products = edited
-                st.rerun()
+                st.success("تم حفظ التغييرات!")
 
-        with tabs[2]:
+        with tab3:
             if st.session_state.feedback:
                 st.table(pd.DataFrame(st.session_state.feedback))
+            else:
+                st.info("لا يوجد تقييمات حالياً")
 
-        with tabs[3]:
-            st.dataframe(pd.DataFrame(list(st.session_state.delivery_zones.items()), columns=["المنطقة", "السعر"]))
-            z_n = st.text_input("اسم المنطقة")
-            z_p = st.number_input("السعر", value=25.0)
-            if st.button("حفظ المنطقة"):
-                st.session_state.delivery_zones[z_n] = z_p
+        with tab4:
+            st.subheader("🚚 إدارة مناطق التوصيل")
+            st.markdown("---")
+
+            zones_df = pd.DataFrame([
+                {"المنطقة": zone, "سعر التوصيل": price}
+                for zone, price in st.session_state.delivery_zones.items()
+            ])
+            st.dataframe(zones_df, use_container_width=True)
+
+            st.markdown("---")
+            st.subheader("➕ إضافة / تعديل منطقة")
+
+            col_z1, col_z2 = st.columns(2)
+            with col_z1:
+                zone_name = st.text_input("اسم المنطقة:")
+            with col_z2:
+                zone_price = st.number_input("سعر التوصيل (ج.م):", min_value=0.0, value=25.0, step=5.0)
+
+            if st.button("💾 حفظ المنطقة", use_container_width=True):
+                if zone_name:
+                    st.session_state.delivery_zones[zone_name] = zone_price
+                    st.success(f"✅ تم حفظ منطقة {zone_name} بسعر {zone_price} ج.م")
+                    st.rerun()
+
+            st.markdown("---")
+            st.subheader("🗑️ حذف منطقة")
+            zone_to_delete = st.selectbox("اختر منطقة للحذف:", list(st.session_state.delivery_zones.keys()))
+            if st.button("❌ حذف المنطقة", use_container_width=True):
+                del st.session_state.delivery_zones[zone_to_delete]
+                st.warning(f"تم حذف منطقة {zone_to_delete}")
                 st.rerun()
 
-        with tabs[4]:
-            st.session_state.discount_settings["enabled"] = st.toggle("تفعيل", value=st.session_state.discount_settings["enabled"])
-            st.session_state.discount_settings["threshold"] = st.number_input("الحد الأدنى", value=st.session_state.discount_settings["threshold"])
-            st.session_state.discount_settings["percentage"] = st.number_input("النسبة (%)", value=st.session_state.discount_settings["percentage"])
-            if st.button("حفظ الإعدادات"):
+        with tab5:
+            st.subheader("🎁 إعدادات الخصم")
+            st.markdown("---")
+
+            settings = st.session_state.discount_settings
+
+            col_d1, col_d2, col_d3 = st.columns(3)
+            with col_d1:
+                enabled = st.toggle("تفعيل الخصم", value=settings["enabled"])
+            with col_d2:
+                threshold = st.number_input("الحد الأدنى (ج.م):", min_value=0.0, value=settings["threshold"], step=50.0)
+            with col_d3:
+                percentage = st.number_input("نسبة الخصم (%):", min_value=0.0, max_value=100.0, value=settings["percentage"], step=5.0)
+
+            if st.button("💾 حفظ إعدادات الخصم", use_container_width=True):
+                st.session_state.discount_settings = {
+                    "enabled": enabled,
+                    "threshold": threshold,
+                    "percentage": percentage
+                }
+                st.success("✅ تم حفظ إعدادات الخصم!")
                 st.rerun()
+
+            st.markdown("---")
+            current_settings = st.session_state.discount_settings
+            example_discount = calculate_discount(300)
+            st.info(
+                f"الخصم الحالي: {'مفعل' if current_settings['enabled'] else 'معطل'} | "
+                f"الحد الأدنى: {current_settings['threshold']} ج.م | "
+                f"نسبة الخصم: {current_settings['percentage']}% | "
+                f"مثال: طلب 300 ج.م = خصم {example_discount} ج.م"
+            )
     else:
         st.info("أدخل كلمة المرور")
